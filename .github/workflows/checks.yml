@@ -1,0 +1,16 @@
+name: Check Matrial
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node test-offline.cjs
+      - run: node --check app/src/main/assets/app.js
+      - run: node --check app/src/main/assets/offline-store.js
+      - run: cmp offline-store.js app/src/main/assets/offline-store.js

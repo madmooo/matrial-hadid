@@ -1,0 +1,25 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let saved=JSON.stringify({version:1,items:[],prices:[]}),fail=false;
+let context={window:{},MayehNative:{read:()=>saved,save:s=>{if(fail)return 'Disk full';saved=s;return 'ok'}}};
+vm.createContext(context);vm.runInContext(fs.readFileSync(__dirname+'/offline-store.js','utf8'),context);
+(async()=>{
+ const api=context.localApi;
+ await api('items','POST',{name:'Aluminium',unit:'kg'});
+ const i=(await api('data')).items[0];
+ const p={item_id:i.id,amount:'100',currency:'تومان',day:'2026-10-28',note:''};
+ await api('prices','POST',p);
+ await api('prices','POST',{...p,day:'2026-10-01',amount:'50'});
+ assert.equal((await api('data')).prices[0].amount,100);
+ await assert.rejects(api('prices','POST',p));
+ await assert.rejects(api('prices','POST',{...p,day:'2026-02-30'}));
+ await assert.rejects(api('prices','POST',{...p,day:'2026-10-27',amount:'0'}));
+ fail=true;let before=saved;
+ await assert.rejects(api('items','POST',{name:'Foolad',unit:'kg'}));assert.equal(saved,before);fail=false;
+ context.validateStore(JSON.parse(saved));
+ assert.throws(()=>context.validateStore({version:1,items:[],prices:[{id:1}]}));
+ await api('items','PUT',{...i,active:false});
+ assert.equal((await api('data')).prices.length,2);
+ await assert.rejects(api('prices','POST',{...p,day:'2026-10-27'}));
+ await api('prices','DELETE',{id:1});assert.equal((await api('data')).prices.length,1);
+ console.log('Offline store checks passed');
+})().catch(e=>{console.error(e);process.exitCode=1});
